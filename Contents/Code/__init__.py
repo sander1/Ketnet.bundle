@@ -24,7 +24,7 @@ def Start():
   RTMPVideoItem.thumb  = R(ICON)
 
   HTTP.CacheTime = CACHE_1HOUR
-  HTTP.Headers['User-Agent'] = 'Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10.6; en-US; rv:1.9.2.13) Gecko/20101203 Firefox/3.6.13'
+  HTTP.Headers['User-Agent'] = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv:2.0.1) Gecko/20100101 Firefox/4.0.1'
 
 ####################################################################################################
 
@@ -62,37 +62,51 @@ def Category(sender, id):
 
 def Videos(sender, url):
   dir = MediaContainer(title2=sender.itemTitle, viewGroup='InfoList')
+  resultDict = {}
 
-  content = HTML.ElementFromURL(url, errors='ignore')
-  for video in content.xpath('//div[@class="mediaItem"]/span[@class="title"]/a'):
-    title = video.text.strip()
-    url = video.get('href')
+  @parallelize
+  def GetVideos():
+    content = HTML.ElementFromURL(url, errors='ignore')
+    videos = content.xpath('//div[@class="mediaItem"]/span[@class="title"]/a')
 
-    details = HTTP.Request(url, cacheTime=CACHE_1DAY).content
+    for num in range(len(videos)):
+      video = videos[num]
 
-    video_details = HTML.ElementFromString(details)
+      @task
+      def GetVideo(num=num, resultDict=resultDict, video=video):
+        title = video.text.strip()
+        url = video.get('href')
 
-    try:
-      subtitle = video_details.xpath('//div[@id="videoMetaData"]//span[@class="source"]')[0].text.strip()
-    except:
-      subtitle = ''
+        details = HTTP.Request(url, cacheTime=CACHE_1DAY).content
 
-    try:
-      summary = video_details.xpath('//div[@id="videoMetaData"]//div[@class="longdesc"]/p')[0].text
-    except:
-      summary = ''
+        video_details = HTML.ElementFromString(details)
 
-    thumb = re.search("\['thumb'\].+?'([^']+)", details).group(1)
+        try:
+          subtitle = video_details.xpath('//div[@id="videoMetaData"]//span[@class="source"]')[0].text.strip()
+        except:
+          subtitle = ''
 
-    # Ignore videos from external websites
-    try:
-        rtmpServer = re.search("\['rtmpServer'\].+?'([^']+)", details).group(1)
-        rtmpPath = re.search("\['rtmpPath'\].+?'([^']+)", details).group(1)
-        rtmpPath = re.sub('\.flv$', '', rtmpPath)
+        try:
+          summary = video_details.xpath('//div[@id="videoMetaData"]//div[@class="longdesc"]/p')[0].text
+        except:
+          summary = ''
 
-        dir.Append(RTMPVideoItem(url=rtmpServer, clip=rtmpPath, title=title, subtitle=subtitle, summary=summary, thumb=Function(Thumb, url=thumb) ) )
-    except:
-        pass
+        thumb = re.search("\['thumb'\].+?'([^']+)", details).group(1)
+
+        # Ignore videos from external websites
+        try:
+          rtmpServer = re.search("\['rtmpServer'\].+?'([^']+)", details).group(1)
+          rtmpPath = re.search("\['rtmpPath'\].+?'([^']+)", details).group(1)
+          rtmpPath = re.sub('\.flv$', '', rtmpPath)
+
+          resultDict[num] = RTMPVideoItem(url=rtmpServer, clip=rtmpPath, title=title, subtitle=subtitle, summary=summary, thumb=Function(Thumb, url=thumb))
+        except:
+          pass
+
+  keys = resultDict.keys()
+  keys.sort()
+  for key in keys:
+    dir.Append(resultDict[key])
 
   return dir
 
