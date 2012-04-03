@@ -91,12 +91,17 @@ def Videos(sender, url):
         except:
           summary = ''
 
-        thumb = re.search("\['thumb'\].+?'([^']+)", details).group(1)
+        try:
+          thumb = re.search("\['thumb'\].+?'([^']+)", details).group(1).replace('\/', '/')
+          if not thumb.startswith('http'):
+            thumb = BASE_URL + thumb
+        except:
+          thumb = None
 
         # Ignore videos from external websites
         try:
-          rtmpServer = re.search("\['rtmpServer'\].+?'([^']+)", details).group(1)
-          rtmpPath = re.search("\['rtmpPath'\].+?'([^']+)", details).group(1)
+          rtmpServer = re.search("\['rtmpServer'\].+?'([^']+)", details).group(1).replace('\/', '/')
+          rtmpPath = re.search("\['rtmpPath'\].+?'([^']+)", details).group(1).replace('\/', '/')
           rtmpPath = re.sub('\.flv$', '', rtmpPath)
 
           resultDict[num] = RTMPVideoItem(url=rtmpServer, clip=rtmpPath, title=title, subtitle=subtitle, summary=summary, thumb=Function(Thumb, url=thumb))
